@@ -1,7 +1,8 @@
 
 using Zygote: @adjoint
 import Base: getindex, setindex!, size, +, *
-import Base: BroadcastStyle, broadcasted, similar
+import Base: BroadcastStyle, broadcasted, similar, copy
+using Base.Broadcast
 
 export TaylorVector
 
@@ -46,6 +47,8 @@ end
 
 @inline +(t::TaylorVector{T,N}, a::AbstractVector{S}) where {S<:Number,T,N} = a + t
 
+@inline +(t1::TaylorVector{T,N}, t2::TaylorVector{T,N}) where {T,N} = TaylorVector{T,N}(map(+, value(t1), value(t2)))
+
 @inline *(a::S, t::TaylorVector{T,N}) where {S<:Number,T,N} = TaylorVector{T,N}(map(v -> a * v, value(t)))
 
 @inline *(t::TaylorVector{T,N}, a::S) where {S<:Number,T,N} = a * t
@@ -67,3 +70,22 @@ container_info(t::TaylorVector{T,N}, rest...) where {T,N} = t
 container_info(::Any, rest...) = container_info(rest...)
 
 # @inline broadcasted(::Broadcast.ArrayStyle{TaylorVector}, ::typeof(exp), t::TaylorVector{T,N}) where {T,N} = TaylorVector{T,N}(map(v -> exp.(v), value(t)))
+
+@generated function exp(t::TaylorVector{T,N}) where {T, N}
+    ex = quote
+        v = value(t)
+        v1 = exp.(v[1])
+    end
+    for i = 2:N
+        ex = quote
+            $ex
+            $(Symbol('v', i)) = +($([
+                :($(binomial(i - 2, j - 1)) * $(Symbol('v', j)) .* v[$i + 1 - $j])
+            for j = 1:i-1]...))
+        end
+    end
+    ex = :($ex; TaylorVector($([Symbol('v', i) for i in 1:N]...)))
+    return :(@inbounds $ex)
+end
+
+copy(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{TaylorVector}}) = bc.f(bc.args...)

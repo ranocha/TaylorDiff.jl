@@ -51,18 +51,18 @@ function benchmark_mlp(f::F, x::Vector{T}, l::Vector{T}) where {F, T<:Number}
     f8 = x -> ForwardDiff.derivative(f7, x)
     f9 = x -> ForwardDiff.derivative(f8, x)
     f10 = x -> ForwardDiff.derivative(f9, x)
-    functions = Function[f1, f2, f3, f4, f5, f6, f7, f8, f9, f10]
+    functions = Function[f1, f2, f3, f4, f5] #, f6, f7, f8, f9, f10]
     nested, taylor = BenchmarkTools.TrialEstimate[], BenchmarkTools.TrialEstimate[]
     for func in functions
-        trial = @benchmark $func(0) samples=10
+        trial = @benchmark $func(0) samples=100
         estim = median(trial)
         push!(nested, estim)
         println(estim)
     end
-    orders = 1:10
+    orders = 1:5
     Ns = [Val{order + 1}() for order in orders]
     for N in Ns
-        trial = @benchmark derivative($f, $x, $l, $N) samples=10
+        trial = @benchmark derivative($f, $x, $l, $N) samples=100
         estim = median(trial)
         push!(taylor, estim)
         println(estim)
